@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <link rel="stylesheet" type="text/css" href="App.css">
+    <title>Enhanced Library App</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; }
+        nav { background-color: #440707; padding: 10px 20px; color: white; }
+        nav ul { list-style: none; padding: 0; margin: 0; display: flex; align-items: center; }
+        nav li { margin-right: 20px; }
+        nav a { color: goldenrod; text-decoration: none; cursor: pointer; }
+        nav a:hover { text-decoration: underline; }
+        nav .right-align { margin-left: auto; }
+
+        .container { padding: 20px; }
+        .auth-forms, #cartView, #profileView { display: none; /* Hidden by default */ }
+        .auth-forms form { border: 1px solid #ccc; padding: 20px; margin-bottom: 20px; max-width: 300px; }
+        .auth-forms label, .auth-forms input { display: block; margin-bottom: 10px; width: 95%; }
+        .auth-forms button { padding: 10px 15px; cursor: pointer; }
+
+        #searchForm { margin-bottom: 20px; }
+        #searchInput { padding: 8px; width: 300px; margin-right: 5px; }
+        #searchButton { padding: 8px 15px; cursor: pointer; }
+
+        .book-section { margin-top: 20px; }
+        #bookList, #borrowedBooksList, #cartItems {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px; /* Use gap for spacing */
+        }
+
+        .book {
+            border: 1px solid #ccc;
+            padding: 10px;
+            width: 200px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between; /* Pushes button to bottom */
+        }
+
+        .book-image {
+            width: 100px;
+            height: 150px;
+            object-fit: cover;
+            align-self: center; /* Center image */
+            margin-bottom: 10px;
+        }
+        .book p { margin: 5px 0; font-size: 0.9em; }
+        .book button { padding: 5px 10px; margin-top: 10px; width: 100%; cursor: pointer; }
+        .book .unavailable { color: red; font-weight: bold; }
+
+        #cartView button, #borrowedBooksList button { width: auto; } /* Override width for specific buttons */
+        #borrowAllButton { display: block; margin: 20px 0; padding: 10px 20px; background-color: #28a745; color: white; border: none; cursor: pointer; }
+        #borrowAllButton:disabled { background-color: #ccc; cursor: not-allowed; }
+
+        h1, h2 { border-bottom: 1px solid #eee; padding-bottom: 5px; }
+    </style>
+</head>
+<body>
+
+    <nav>
+        <ul>
+            <li><a onclick="showView('homeView')"> Library</a></li>
+            <li><a id="navCartLink" onclick="showView('cartView')" style="display: none;">🛒 Cart (<span id="cartCount">0</span>)</a></li>
+            <li><a id="navProfileLink" onclick="showView('profileView')" style="display: none;"> Profile</a></li>
+            <li class="right-align"><a id="navAuthLink" onclick="showView('authView')">Login / Sign Up</a></li>
+            <li id="navUserInfo" style="display: none;">Logged in as: <strong id="loggedInUsername"></strong></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+
+        <!-- Authentication View -->
+        <div id="authView" class="auth-forms">
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <h2>Login</h2>
+                <label for="loginUsername">Username:</label>
+                <input type="text" id="loginUsername" required>
+                <label for="loginPassword">Password:</label>
+                <input type="password" id="loginPassword" required>
+                <button type="submit">Login</button>
+            </form>
+
+            <hr>
+
+            <form id="signupForm" onsubmit="handleSignup(event)">
+                <h2>Sign Up</h2>
+                <label for="signupUsername">Username:</label>
+                <input type="text" id="signupUsername" required>
+                <label for="signupPassword">Password:</label>
+                <input type="password" id="signupPassword" required>
+                <button type="submit">Sign Up</button>
+            </form>
+        </div>
+
+        <!-- Home View (Book List & Search) -->
+        <div id="homeView">
+            <h1>Available Books</h1>
+            <form id="searchForm" onsubmit="handleSearch(event)">
+                <input type="text" id="searchInput" placeholder="Search by title, author, or category">
+                <button type="submit" id="searchButton">Search</button>
+            </form>
+            <div id="bookList" class="book-section"></div>
+        </div>
+
+        <!-- Cart View -->
+        <div id="cartView">
+            <h1>Your Cart</h1>
+            <div id="cartItems" class="book-section"></div>
+            <button id="borrowAllButton" onclick="borrowFromCart()" disabled>Borrow Selected Items</button>
+        </div>
+
+        <!-- Profile View (Borrowed Books) -->
+        <div id="profileView">
+            <h1>Your Profile</h1>
+            <h2 id="profileUsername"></h2>
+            <h2>Borrowed Books</h2>
+            <div id="borrowedBooksList" class="book-section"></div>
+             <!-- Optional Testing Button -->
+            <button onclick="simulateDueDateAlert()" style="margin-top: 20px;">Simulate Due Dates (for testing)</button>
+        </div>
+
+    </div> <!-- /container -->
+
+    <script>
+        // --- Global Data ---
+        let books = JSON.parse(localStorage.getItem("books")) || [
+             { id: 1, title: "The Great Gatsby", author: "F. Scott Fitzgerald", category: "Fiction", available: true, image: "https://covers.openlibrary.org/b/id/7205392-L.jpg" },
+             { id: 2, title: "Sapiens: A Brief History of Humankind", author: "Yuval Noah Harari", category: "Non-Fiction", available: true, image: "https://covers.openlibrary.org/b/id/8319250-L.jpg" },
+             { id: 3, title: "Dune", author: "Frank Herbert", category: "Sci-Fi", available: true, image: "https://covers.openlibrary.org/b/id/9219253-L.jpg" },
+             { id: 4, title: "Gone Girl", author: "Gillian Flynn", category: "Mystery", available: true, image: "https://covers.openlibrary.org/b/id/8369256-L.jpg" },
+             { id: 5, title: "Harry Potter and the Sorcerer's Stone", author: "J.K. Rowling", category: "Fantasy", available: true, image: "https://covers.openlibrary.org/b/id/7884868-L.jpg" },
+             { id: 6, title: "To Kill a Mockingbird", author: "Harper Lee", category: "Fiction", available: true, image: "https://covers.openlibrary.org/b/id/10073618-L.jpg" },
+             { id: 7, title: "1984", author: "George Orwell", category: "Dystopian", available: true, image: "https://covers.openlibrary.org/b/id/10573078-L.jpg" },
+             { id: 8, title: "The Hobbit", author: "J.R.R. Tolkien", category: "Fantasy", available: true, image: "https://covers.openlibrary.org/b/id/10573114-L.jpg" },
+             { "id": 1, "title": "The Great Gatsby", "author": "F. Scott Fitzgerald", "year": 1925 },
+             { "id": 2, "title": "Animal farm", "author": "George Orwell", "year": 1949 },
+             { "id": 3, "title": "To Kill a Mockingbird", "author": "Harper Lee", "year": 1960 }
+        ];
+
+        let users = JSON.parse(localStorage.getItem("users")) || [];
+        let currentUser = JSON.parse(sessionStorage.getItem("currentUser")) || null; // Use sessionStorage for login state
+
+        // --- Helper Functions ---
+        function saveData() {
+            // Save the global book list (mainly for availability status)
+            localStorage.setItem("books", JSON.stringify(books));
+            // Save all user data
+            localStorage.setItem("users", JSON.stringify(users));
+        }
+
+        function saveCurrentUserSession() {
+             sessionStorage.setItem("currentUser", JSON.stringify(currentUser));
+        }
+
+        function getBookById(id) {
+            return books.find(b => b.id === id);
+        }
+
+        function getCurrentUserData() {
+            if (!currentUser) return null;
+            return users.find(u => u.username === currentUser);
+        }
+
+        function updateUserData(updatedUser) {
+            if (!updatedUser) return;
+            const userIndex = users.findIndex(u => u.username === updatedUser.username);
+            if (userIndex > -1) {
+                users[userIndex] = updatedUser;
+                saveData();
+            }
+        }
+
+        // --- View Management ---
+        function showView(viewId) {
+            document.getElementById('homeView').style.display = 'none';
+            document.getElementById('authView').style.display = 'none';
+            document.getElementById('cartView').style.display = 'none';
+            document.getElementById('profileView').style.display = 'none';
+
+            const targetView = document.getElementById(viewId);
+            if (targetView) {
+                targetView.style.display = 'block';
+                // Refresh content when view is shown
+                if (viewId === 'cartView') displayCart();
+                if (viewId === 'profileView') displayProfile();
+                if (viewId === 'homeView') displayBooks(); // Refresh book list on home view
+            } else {
+                document.getElementById('homeView').style.display = 'block'; // Default to home
+            }
+        }
+
+        // --- UI Update Function ---
+        function updateUI() {
+            const userData = getCurrentUserData();
+            const loggedIn = !!currentUser;
+
+            // Update Nav Bar
+            document.getElementById('navCartLink').style.display = loggedIn ? 'inline-block' : 'none';
+            document.getElementById('navProfileLink').style.display = loggedIn ? 'inline-block' : 'none';
+            document.getElementById('navUserInfo').style.display = loggedIn ? 'inline-block' : 'none';
+            document.getElementById('navAuthLink').textContent = loggedIn ? 'Logout' : 'Login / Sign Up';
+            document.getElementById('navAuthLink').onclick = loggedIn ? handleLogout : () => showView('authView');
+
+            if (loggedIn && userData) {
+                document.getElementById('loggedInUsername').textContent = currentUser;
+                document.getElementById('cartCount').textContent = userData.cart.length;
+            } else {
+                 document.getElementById('cartCount').textContent = 0;
+            }
+
+            // Refresh current view or redirect if needed
+            if (!loggedIn && (document.getElementById('cartView').style.display === 'block' || document.getElementById('profileView').style.display === 'block')) {
+                showView('homeView'); // Redirect to home if logged out from profile/cart
+            } else if (loggedIn && document.getElementById('authView').style.display === 'block') {
+                 showView('homeView'); // Redirect to home after login/signup
+            }
+
+             // Update displays that depend on login state or data changes
+             displayBooks(); // Always refresh book list availability and buttons
+             if(loggedIn) {
+                 displayCart();
+                 displayProfile();
+             } else {
+                 // Clear sensitive views if logged out
+                 document.getElementById('cartItems').innerHTML = '<p>Please log in to view your cart.</p>';
+                 document.getElementById('borrowedBooksList').innerHTML = '<p>Please log in to view your borrowed books.</p>';
+                 document.getElementById('profileUsername').textContent = '';
+             }
+        }
+
+
+        // --- Authentication Functions ---
+        function handleSignup(event) {
+            event.preventDefault();
+            const username = document.getElementById('signupUsername').value.trim();
+            const password = document.getElementById('signupPassword').value; // In real app, hash this!
+
+            if (users.some(user => user.username === username)) {
+                alert("Username already exists!");
+                return;
+            }
+
+            users.push({
+                username: username,
+                password: password, // Storing plain text - NOT SECURE
+                cart: [],
+                borrowedBooks: []
+            });
+            saveData();
+            alert("Sign up successful! Please log in.");
+            document.getElementById('signupForm').reset();
+            showView('authView'); // Stay on auth view, prompt login
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('loginUsername').value.trim();
+            const password = document.getElementById('loginPassword').value;
+
+            const user = users.find(u => u.username === username && u.password === password); // Plain text check - NOT SECURE
+
+            if (user) {
+                currentUser = username;
+                saveCurrentUserSession();
+                alert("Login successful!");
+                document.getElementById('loginForm').reset();
+                updateUI(); // Update nav, etc.
+                showView('homeView'); // Go to home page
+            } else {
+                alert("Invalid username or password.");
+            }
+        }
+
+        function handleLogout() {
+            currentUser = null;
+            sessionStorage.removeItem("currentUser");
+            alert("Logged out successfully.");
+            updateUI();
+            showView('homeView'); // Go to home page after logout
+        }
+
+        // --- Book Display & Search ---
+        function displayBooks(filteredBooks = books) {
+            let bookList = document.getElementById("bookList");
+            bookList.innerHTML = "";
+            const userData = getCurrentUserData();
+
+            if (filteredBooks.length === 0) {
+                bookList.innerHTML = "<p>No books found matching your criteria.</p>";
+                return;
+            }
+
+            filteredBooks.forEach(book => {
+                let bookDiv = document.createElement("div");
+                bookDiv.classList.add("book");
+
+                let buttonHtml = '';
+                let availabilityText = '';
+
+                if (!book.available) {
+                     availabilityText = '<p class="unavailable">Currently Borrowed</p>';
+                } else if (!currentUser) {
+                    buttonHtml = '<button disabled title="Log in to add to cart">Add to Cart</button>';
+                } else {
+                    const isInCart = userData?.cart.some(item => item.bookId === book.id);
+                    const isBorrowed = userData?.borrowedBooks.some(item => item.bookId === book.id);
+
+                    if (isBorrowed) {
+                        availabilityText = '<p class="unavailable">You Borrowed This</p>';
+                    } else if (isInCart) {
+                        buttonHtml = '<button onclick="removeFromCart('+ book.id +')">Remove from Cart</button>';
+                    } else {
+                        buttonHtml = '<button onclick="addToCart('+ book.id +')">Add to Cart</button>';
+                    }
+                }
+
+
+                bookDiv.innerHTML = `
+                    <img src="${book.image}" alt="${book.title}" class="book-image">
+                    <p><strong>${book.title}</strong></p>
+                    <p>Author: ${book.author}</p>
+                    <p>Category: ${book.category}</p>
+                    ${availabilityText}
+                    ${buttonHtml}
+                `;
+                bookList.appendChild(bookDiv);
+            });
+        }
+
+        function handleSearch(event) {
+            if(event) event.preventDefault(); // Prevent form submission if called by event
+            let searchBox = document.getElementById("searchInput");
+            let query = searchBox.value.toLowerCase().trim();
+
+            let filteredBooks = books.filter(book =>
+                book.title.toLowerCase().includes(query) ||
+                book.author.toLowerCase().includes(query) ||
+                book.category.toLowerCase().includes(query)
+            );
+
+            displayBooks(filteredBooks);
+        }
+         // Add event listener for live search on input
+         document.getElementById('searchInput').addEventListener('input', () => handleSearch(null));
+
+
+        // --- Cart Functions ---
+        function addToCart(bookId) {
+             if (!currentUser) {
+                 alert("Please log in to add items to your cart.");
+                 showView('authView');
+                 return;
+             }
+
+             const userData = getCurrentUserData();
+             const book = getBookById(bookId);
+
+             if (!book || !book.available) {
+                 alert("This book is not available or doesn't exist!");
+                 return;
+             }
+             if (userData.cart.some(item => item.bookId === bookId)) {
+                 alert("This book is already in your cart.");
+                 return;
+             }
+              if (userData.borrowedBooks.some(item => item.bookId === bookId)) {
+                 alert("You have already borrowed this book.");
+                 return;
+             }
+
+             userData.cart.push({ bookId: bookId });
+             updateUserData(userData);
+             updateUI(); // Refreshes cart count and book button
+             // No alert needed here, UI update is feedback
+        }
+
+        function removeFromCart(bookId) {
+             if (!currentUser) return; // Should not happen if button is visible
+
+             const userData = getCurrentUserData();
+             userData.cart = userData.cart.filter(item => item.bookId !== bookId);
+             updateUserData(userData);
+             updateUI(); // Refreshes cart count, book button, and cart view
+        }
+
+        function displayCart() {
+             const cartItemsDiv = document.getElementById("cartItems");
+             const borrowAllButton = document.getElementById("borrowAllButton");
+             cartItemsDiv.innerHTML = ""; // Clear previous items
+
+             if (!currentUser) {
+                 cartItemsDiv.innerHTML = "<p>Please log in to view your cart.</p>";
+                 borrowAllButton.disabled = true;
+                 return;
+             }
+
+             const userData = getCurrentUserData();
+
+             if (!userData || userData.cart.length === 0) {
+                 cartItemsDiv.innerHTML = "<p>Your cart is empty.</p>";
+                 borrowAllButton.disabled = true;
+                 return;
+             }
+
+             borrowAllButton.disabled = false; // Enable button if cart has items
+
+             userData.cart.forEach(cartItem => {
+                 const book = getBookById(cartItem.bookId);
+                 if (book) {
+                     let bookDiv = document.createElement("div");
+                     bookDiv.classList.add("book");
+                     bookDiv.innerHTML = `
+                         <img src="${book.image}" alt="${book.title}" class="book-image">
+                         <p><strong>${book.title}</strong></p>
+                         <p>Author: ${book.author}</p>
+                         <button onclick="removeFromCart(${book.id})">Remove</button>
+                     `;
+                     cartItemsDiv.appendChild(bookDiv);
+                 } else {
+                     // Handle case where book might have been removed from the library system
+                     // For simplicity, we'll just skip displaying it
+                     console.warn(`Book with ID ${cartItem.bookId} not found in library.`);
+                 }
+             });
+        }
+
+        // --- Borrowing & Returning Functions ---
+        function borrowFromCart() {
+             if (!currentUser) return;
+             const userData = getCurrentUserData();
+             if (!userData || userData.cart.length === 0) {
+                 alert("Your cart is empty.");
+                 return;
+             }
+
+             const currentBorrowedCount = userData.borrowedBooks.length;
+             const cartCount = userData.cart.length;
+             const borrowLimit = 3; // Example limit
+
+             if (currentBorrowedCount + cartCount > borrowLimit) {
+                 alert(`You can only borrow up to ${borrowLimit} books in total. You currently have ${currentBorrowedCount} borrowed and ${cartCount} in your cart.`);
+                 return;
+             }
+
+             let borrowedCountThisSession = 0;
+             let failedBorrows = 0;
+             const remainingCartItems = []; // Keep track of items that couldn't be borrowed
+
+             userData.cart.forEach(cartItem => {
+                 const book = getBookById(cartItem.bookId);
+                 // Double check availability right before borrowing
+                 if (book && book.available) {
+                     book.available = false; // Mark as unavailable in the main list
+                     const dueDate = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000); // 14 days
+                     userData.borrowedBooks.push({
+                         bookId: book.id,
+                         dueDate: dueDate.toISOString()
+                     });
+                     borrowedCountThisSession++;
+                 } else {
+                     failedBorrows++;
+                     remainingCartItems.push(cartItem); // Add back to cart if failed
+                     console.warn(`Book "${book?.title || 'ID: ' + cartItem.bookId}" could not be borrowed (likely became unavailable).`);
+                 }
+             });
+
+             userData.cart = remainingCartItems; // Update cart with failed items
+             updateUserData(userData); // Save changes to user data
+             saveData(); // Save changes to global book availability
+
+             if (borrowedCountThisSession > 0) {
+                alert(`${borrowedCountThisSession} book(s) borrowed successfully!`);
+             }
+             if (failedBorrows > 0) {
+                 alert(`${failedBorrows} book(s) could not be borrowed as they became unavailable. They remain in your cart.`);
+             }
+
+             updateUI(); // Refresh everything
+             showView('profileView'); // Show borrowed books after borrowing
+        }
+
+
+         function returnBook(bookId) {
+            if (!currentUser) return;
+            const userData = getCurrentUserData();
+            if (!userData) return;
+
+            // Find the book in the user's borrowed list
+            const bookIndex = userData.borrowedBooks.findIndex(b => b.bookId === bookId);
+            if (bookIndex === -1) {
+                alert("Error: Book not found in your borrowed list.");
+                return;
+            }
+
+            // Remove from user's borrowed list
+            userData.borrowedBooks.splice(bookIndex, 1);
+
+            // Make the book available again in the main list
+            const originalBook = getBookById(bookId);
+            if (originalBook) {
+                originalBook.available = true;
+            } else {
+                 console.warn(`Returned book with ID ${bookId} not found in main book list.`);
+            }
+
+            updateUserData(userData); // Save user data changes
+            saveData(); // Save book availability change
+
+            alert("Book returned successfully!");
+            updateUI(); // Refresh views
+        }
+
+        // --- Profile View ---
+         function displayProfile() {
+             const profileUsername = document.getElementById("profileUsername");
+             const borrowedDiv = document.getElementById("borrowedBooksList");
+             borrowedDiv.innerHTML = ""; // Clear previous content
+
+             if (!currentUser) {
+                 profileUsername.textContent = "Please log in";
+                 borrowedDiv.innerHTML = "<p>Log in to see your borrowed books.</p>";
+                 return;
+             }
+
+             const userData = getCurrentUserData();
+             if (!userData) {
+                 console.error("Could not find data for current user:", currentUser);
+                 profileUsername.textContent = "Error loading profile";
+                 return;
+             }
+
+             profileUsername.textContent = `Username: ${userData.username}`;
+
+             if (userData.borrowedBooks.length === 0) {
+                 borrowedDiv.innerHTML = "<p>You haven't borrowed any books yet.</p>";
+                 return;
+             }
+
+             userData.borrowedBooks.forEach(borrowedItem => {
+                 const book = getBookById(borrowedItem.bookId);
+                 if (book) {
+                     let bookDiv = document.createElement("div");
+                     bookDiv.classList.add("book");
+
+                     const dueDate = new Date(borrowedItem.dueDate);
+                     const now = new Date();
+                     // Calculate difference in whole days, rounding up.
+                     // If due date is today or past, days left is 0 or negative.
+                     const daysLeft = Math.ceil((dueDate.setHours(0,0,0,0) - now.setHours(0,0,0,0)) / (1000 * 60 * 60 * 24));
+                     let dueText = `Due in: ${daysLeft} days`;
+                     if (daysLeft < 0) {
+                         dueText = `<strong style="color: red;">Overdue by ${Math.abs(daysLeft)} days</strong>`;
+                     } else if (daysLeft === 0) {
+                         dueText = `<strong style="color: orange;">Due Today</strong>`;
+                     } else if (daysLeft === 1) {
+                         dueText = `Due in: 1 day`;
+                     }
+
+
+                     bookDiv.innerHTML = `
+                         <img src="${book.image}" alt="${book.title}" class="book-image">
+                         <p><strong>${book.title}</strong></p>
+                         <p>${dueText}</p>
+                         <button onclick="returnBook(${book.id})">Return</button>
+                     `;
+                     borrowedDiv.appendChild(bookDiv);
+                 }
+             });
+         }
+
+        // --- Utility/Testing Functions ---
+        function simulateDueDateAlert() {
+            if (!currentUser) {
+                alert("Please log in to simulate due dates.");
+                return;
+            }
+            const userData = getCurrentUserData();
+            if (userData && userData.borrowedBooks.length > 0) {
+                 // Set first borrowed book due date to 2 days from now for testing
+                 userData.borrowedBooks[0].dueDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString();
+                 // Set second borrowed book (if exists) to yesterday
+                 if (userData.borrowedBooks.length > 1) {
+                    userData.borrowedBooks[1].dueDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000).toISOString();
+                 }
+                 updateUserData(userData);
+                 alert("Simulated due dates updated for testing.");
+                 displayProfile(); // Refresh profile view
+            } else {
+                alert("No borrowed books to simulate due dates for.");
+            }
+        }
+
+        // --- Initial Load ---
+        document.addEventListener('DOMContentLoaded', () => {
+            updateUI(); // Set initial UI based on login state
+            showView('homeView'); // Start on the home view
+        });
+
+    </script>
+
+</body>
+</html>
