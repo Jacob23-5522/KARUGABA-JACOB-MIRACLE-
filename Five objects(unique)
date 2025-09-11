@@ -1,0 +1,70 @@
+Everyday Life Objects
+
+House → address, number of rooms, color
+
+            People & Roles
+
+Teacher → name, subject, years of experiences
+
+         Technology & Media
+
+Movie → title, director, duration
+
+      Nature & Environment
+
+Tree → species, height, age
+
+        Abstract / Useful Data Models
+
+Bank Account → account number, balance, owner
+[12:19 AM] # 1. Object: House
+class House:
+    def _init_(self, address, rooms, color):
+        self.address = address
+        self.rooms = rooms
+        self.color = color
+
+# 2. Object: Teacher
+class Teacher:
+    def _init_(self, name, subject, years_experience):
+        self.name = name
+        self.subject = subject
+        self.years_experience = years_experience
+
+# 3. Object: Movie
+class Movie:
+    def _init_(self, title, director, duration):
+        self.title = title
+        self.director = director
+        self.duration = duration  # in minutes
+
+# 4. Object: Tree
+class Tree:
+    def _init_(self, species, height, age):
+        self.species = species
+        self.height = height  # in meters
+        self.age = age  # in years
+
+# 5. Object: BankAccount
+class BankAccount:
+    def _init_(self, account_number, owner, balance):
+        self.account_number = account_number
+        self.owner = owner
+        self.balance = balance
+
+
+
+# --- Instances (unique examples) ---
+
+house1 = House("123 Maple St", 4, "Blue")
+teacher1 = Teacher("Mr. Smith", "Mathematics", 12)
+movie1 = Movie("Inception", "Baza David", 148)
+tree1 = Tree("Oak", 20, 80)
+account1 = BankAccount("00112233", "Kash Simple", 2500.75)
+
+# Print instances
+print(vars(house1))
+print(vars(teacher1))
+print(vars(movie1))
+print(vars(tree1))
+print(vars(account1))
